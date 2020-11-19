@@ -18,6 +18,7 @@ if(process.argv.indexOf('-V') > -1 || process.argv.indexOf('--version') > -1) {
 const devMode = (process.argv.indexOf('--dev') > -1);
 const debugMode = (process.argv.indexOf('--debug') > -1);
 const preserveVcs = devMode && (process.argv.indexOf('--preserve-vcs') > -1);
+const upgradeTrigger = (process.argv.indexOf('--no-upgrade') < 0);
 
 const sysRepoUrl = 'git@gitlab.multivisio.net:koala/system/koala.git';
 const extRepoUrl = 'git@gitlab.multivisio.net:koala/extensions';
@@ -149,6 +150,24 @@ async function setOptions(options) {
     await saveOptions(optionFile);
 }
 
+async function generateUpgradeTrigger() {
+    console.info('Generating system upgrade trigger...')
+    debug('Creating empty regular file \'./upgrade\'');
+    await fs.writeFile('./upgrade', '');
+}
+
+async function removeUpgradeTrigger() {
+    debug('Checking if regular file \'./upgrade\' exists...');
+    try {
+        await fs.stat('./upgrade');
+        debug('File found. Removing regular file \'upgrade\' ...');
+        console.info('Removing upgrade trigger...');
+        await fs.unlink('./upgrade');
+    } catch {
+        debug('File \'./upgrade\' not found.');
+    }
+}
+
 (async () => {
     try {
         const config = await getConfig();
@@ -159,6 +178,11 @@ async function setOptions(options) {
             }
         }
         await setOptions(config.options);
+        if(upgradeTrigger) {
+            await generateUpgradeTrigger();
+        } else {
+            await removeUpgradeTrigger();
+        }
         console.info('Clearing cache and temporary files...');
         await exec('npm run clearcache');
     } catch (exception) {
