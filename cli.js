@@ -3,20 +3,33 @@ const process = require('process');
 const environment = require('child_process');
 const ini = require('ini');
 const fs = require('fs').promises;
-const rmrf = async path => fs.rmdir(path, {recursive: true});
+const { printHelpText } = require('./help');
+const rmrf = async path => fs.rmdir(path, { recursive: true });
 
-if(process.argv.indexOf('-V') > -1 || process.argv.indexOf('--version') > -1) {
+async function printVersionInfo() {
     const pkgjson = require('fs').readFileSync(`${__dirname}/package.json`).toString();
     const config = JSON.parse(pkgjson);
     const version = config.version;
     const issues = config.bugs.url;
     console.log(`Koala Package Manager v${version}`);
     console.log(`Report issues at ${issues}\n`);
+}
+
+const subcommand = (process.argv[2]?.toLowerCase() || 'help');
+
+if (subcommand === 'help') {
+    printVersionInfo();
+    printHelpText();
     process.exit(0);
 }
 
-const devMode = (process.argv.indexOf('--dev') > -1);
-const debugMode = (process.argv.indexOf('--debug') > -1);
+if (subcommand === 'version') {
+    printVersionInfo();
+    process.exit(0);
+}
+
+const devMode = (process.argv.indexOf('--dev') > -1 || process.argv.indexOf('-D') > -1);
+const debugMode = (process.argv.indexOf('--debug') > -1 || process.argv.indexOf('-v') > -1);
 const preserveVcs = devMode && (process.argv.indexOf('--preserve-vcs') > -1);
 const upgradeTrigger = (process.argv.indexOf('--no-upgrade') < 0);
 
@@ -28,7 +41,7 @@ function extensionName(extensionName) {
 }
 
 async function getConfig() {
-    const pkgFile = await fs.readFile(`./package.json`, {flag: 'r'});
+    const pkgFile = await fs.readFile(`./package.json`, { flag: 'r' });
     const pkgJson = pkgFile.toString();
     const pkgConfig = JSON.parse(pkgJson);
     const config = typeof pkgConfig.koala !== 'undefined' ?
@@ -36,7 +49,7 @@ async function getConfig() {
         {
             version: 'master',
             'extensions': {},
-            'options': {dev: {}, prod: {}},
+            'options': { dev: {}, prod: {} },
         };
 
     if (typeof config.version === 'undefined') {
@@ -114,7 +127,7 @@ async function installSystem(version) {
 async function getOptions() {
     const optionsFile = (await fs.readFile(
         './Koala/Config/config.ini',
-        {flag: 'r'},
+        { flag: 'r' },
     )).toString();
     return ini.parse(optionsFile);
 }
@@ -124,7 +137,7 @@ async function saveOptions(data) {
     await fs.writeFile(
         './Koala/Config/config.ini',
         iniData,
-        {flag: 'w'},
+        { flag: 'w' },
     );
 }
 
@@ -168,24 +181,26 @@ async function removeUpgradeTrigger() {
     }
 }
 
-(async () => {
-    try {
-        const config = await getConfig();
-        await installSystem(config.version);
-        for (let key in config.extensions) {
-            if (config.extensions.hasOwnProperty(key)) {
-                await installExtension(key, config.extensions[key]);
+if (subcommand === 'install') {
+    (async () => {
+        try {
+            const config = await getConfig();
+            await installSystem(config.version);
+            for (let key in config.extensions) {
+                if (config.extensions.hasOwnProperty(key)) {
+                    await installExtension(key, config.extensions[key]);
+                }
             }
+            await setOptions(config.options);
+            if (upgradeTrigger) {
+                await generateUpgradeTrigger();
+            } else {
+                await removeUpgradeTrigger();
+            }
+            console.info('Clearing cache and temporary files...');
+            await exec('npm run clearcache');
+        } catch (exception) {
+            console.warn(debugMode ? exception : exception.message);
         }
-        await setOptions(config.options);
-        if(upgradeTrigger) {
-            await generateUpgradeTrigger();
-        } else {
-            await removeUpgradeTrigger();
-        }
-        console.info('Clearing cache and temporary files...');
-        await exec('npm run clearcache');
-    } catch (exception) {
-        console.warn(debugMode ? exception : exception.message);
-    }
-})();
+    })();
+}
