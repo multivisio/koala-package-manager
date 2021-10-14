@@ -2,8 +2,8 @@
 const process = require('process');
 const environment = require('child_process');
 const ini = require('ini');
-const fs = require('fs').promises;
-const rmrf = async path => fs.rmdir(path, {recursive: true});
+const fs = require('fs');
+const rmrf = async path => fs.promises.rm(path, {force: true, recursive: true});
 
 if(process.argv.indexOf('-V') > -1 || process.argv.indexOf('--version') > -1) {
     const pkgjson = require('fs').readFileSync(`${__dirname}/package.json`).toString();
@@ -18,7 +18,6 @@ if(process.argv.indexOf('-V') > -1 || process.argv.indexOf('--version') > -1) {
 const devMode = (process.argv.indexOf('--dev') > -1);
 const debugMode = (process.argv.indexOf('--debug') > -1);
 const preserveVcs = devMode && (process.argv.indexOf('--preserve-vcs') > -1);
-const upgradeTrigger = (process.argv.indexOf('--no-upgrade') < 0);
 
 const sysRepoUrl = 'git@gitlab.multivisio.net:koala/system/koala.git';
 const extRepoUrl = 'git@gitlab.multivisio.net:koala/extensions';
@@ -28,7 +27,7 @@ function extensionName(extensionName) {
 }
 
 async function getConfig() {
-    const pkgFile = await fs.readFile(`./package.json`, {flag: 'r'});
+    const pkgFile = await fs.promises.readFile(`./package.json`, {flag: 'r'});
     const pkgJson = pkgFile.toString();
     const pkgConfig = JSON.parse(pkgJson);
     const config = typeof pkgConfig.koala !== 'undefined' ?
@@ -84,6 +83,8 @@ async function installExtension(name, version) {
     console.info(`Installing: ${name}@${version}`);
     await removeExtension(name);
     await exec(command);
+    await addToGitIgnore(`/Ext/${extName}/`);
+
 
     if (!preserveVcs) {
         debug('Removing VSC Directory...');
@@ -104,6 +105,8 @@ async function installSystem(version) {
     console.log(`Installing: koala@${version}`);
     await removeSystemFiles();
     await exec(command);
+    await addToGitIgnore("/Koala/");
+
 
     if (!preserveVcs) {
         debug('Removing VSC Directory...');
@@ -112,7 +115,7 @@ async function installSystem(version) {
 }
 
 async function getOptions() {
-    const optionsFile = (await fs.readFile(
+    const optionsFile = (await fs.promises.readFile(
         './Koala/Config/config.ini',
         {flag: 'r'},
     )).toString();
@@ -121,7 +124,7 @@ async function getOptions() {
 
 async function saveOptions(data) {
     const iniData = ini.stringify(data);
-    await fs.writeFile(
+    await fs.promises.writeFile(
         './Koala/Config/config.ini',
         iniData,
         {flag: 'w'},
@@ -150,26 +153,19 @@ async function setOptions(options) {
     await saveOptions(optionFile);
 }
 
-async function generateUpgradeTrigger() {
-    console.info('Generating system upgrade trigger...')
-    debug('Creating empty regular file \'./upgrade\'');
-    await fs.writeFile('./upgrade', '');
-}
-
-async function removeUpgradeTrigger() {
-    debug('Checking if regular file \'./upgrade\' exists...');
-    try {
-        await fs.stat('./upgrade');
-        debug('File found. Removing regular file \'upgrade\' ...');
-        console.info('Removing upgrade trigger...');
-        await fs.unlink('./upgrade');
-    } catch {
-        debug('File \'./upgrade\' not found.');
+async function addToGitIgnore(value) {
+    debug(`Adding ${value} to .gitignore`)
+    if(!fs.existsSync("./.gitignore")){
+        await fs.promises.writeFile('./.gitignore', '');
+    }
+    if(fs.readFileSync('./.gitignore',"utf8").split("\n").indexOf(value) === -1){
+        fs.promises.appendFile("./.gitignore", value+ "\n");
     }
 }
 
 (async () => {
     try {
+        await addToGitIgnore("/node_modules/");
         const config = await getConfig();
         await installSystem(config.version);
         for (let key in config.extensions) {
@@ -178,13 +174,10 @@ async function removeUpgradeTrigger() {
             }
         }
         await setOptions(config.options);
-        if(upgradeTrigger) {
-            await generateUpgradeTrigger();
-        } else {
-            await removeUpgradeTrigger();
-        }
+        /*
         console.info('Clearing cache and temporary files...');
         await exec('npm run clearcache');
+         */
     } catch (exception) {
         console.warn(debugMode ? exception : exception.message);
     }
