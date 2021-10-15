@@ -105,8 +105,14 @@ async function installSystem(version) {
     console.log(`Installing: koala@${version}`);
     await removeSystemFiles();
     await exec(command);
-    await addToGitIgnore("/Koala/");
 
+    await addToGitIgnore("/node_modules/");
+    await addToGitIgnore("/application.env");
+    await addToGitIgnore("/.env");
+    await addToGitIgnore("/.dumps/");
+    await addToGitIgnore("/Files/");
+    await addToGitIgnore("/SqlDumps/");
+    await addToGitIgnore("/Koala/");
 
     if (!preserveVcs) {
         debug('Removing VSC Directory...');
@@ -165,7 +171,6 @@ async function addToGitIgnore(value) {
 
 (async () => {
     try {
-        await addToGitIgnore("/node_modules/");
         const config = await getConfig();
         await installSystem(config.version);
         for (let key in config.extensions) {
