@@ -164,8 +164,8 @@ async function addToGitIgnore(value) {
     if(!fs.existsSync("./.gitignore")){
         await fs.promises.writeFile('./.gitignore', '');
     }
-    if(fs.readFileSync('./.gitignore',"utf8").split("\n").indexOf(value) === -1){
-        fs.promises.appendFile("./.gitignore", value+ "\n");
+    if(fs.readFileSync('./.gitignore',"utf8").split("\r\n").indexOf(value) === -1){
+        fs.promises.appendFile("./.gitignore", value+ "\r\n");
     }
 }
 
